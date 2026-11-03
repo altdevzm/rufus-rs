@@ -53,17 +53,11 @@ jobs:
           echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
 
           python - <<'PY'
-          import os
           import pathlib
-          import re
-
-          version = os.environ["APP_VERSION"]
           cargo_path = pathlib.Path("Cargo.toml")
           text = cargo_path.read_text(encoding="utf-8")
-          updated, count = re.subn(r'(?m)^version = ".*?"$', f'version = "{version}"', text, count=1)
-          if count != 1:
-              raise SystemExit("Cargo.toml version field not found")
-          cargo_path.write_text(updated, encoding="utf-8")
+          if f'version = "{__import__("os").environ["APP_VERSION"]}"' not in text:
+              raise SystemExit("Cargo.toml version does not match the tag value; bump Cargo.toml before creating the release tag.")
           PY
 
       - name: Cache Cargo dependencies
@@ -101,6 +95,7 @@ jobs:
           $template = Get-Content "$env:GITHUB_WORKSPACE\installer\rufus-rs.iss.template" -Raw
           $template = $template.Replace('__APP_VERSION__', $env:APP_VERSION)
           $template = $template.Replace('__APP_NAME__', $env:APP_NAME)
+          $template = $template.Replace('__SOURCE_DIR__', $env:GITHUB_WORKSPACE)
           $template = $template.Replace('__INSTALLER_OUTPUT__', "$env:GITHUB_WORKSPACE\dist")
           $template = $template.Replace('__ICON_FILE__', "$env:GITHUB_WORKSPACE\assets\rufus-rs.ico")
           $template = $template.Replace('__APP_EXE__', 'rufus-rs.exe')

@@ -1,3 +1,5 @@
+#define MySourceDir "__SOURCE_DIR__"
+
 [Setup]
 AppName=__APP_NAME__
 AppVersion=__APP_VERSION__

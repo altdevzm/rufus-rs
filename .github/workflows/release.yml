@@ -47,6 +47,8 @@ jobs:
           fi
 
           VERSION="${TAG#v}"
+          export RELEASE_TAG="$TAG"
+          export APP_VERSION="$VERSION"
           echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
           echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
 

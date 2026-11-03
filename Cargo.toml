@@ -1,0 +1,31 @@
+[package]
+name = "rufus-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.29"
+egui = "0.29"
+rfd = "0.15"
+crossbeam-channel = "0.5"
+sha2 = "0.10"
+sha1 = "0.10"
+md-5 = "0.10"
+humansize = "2.1"
+
+[profile.release]
+strip = true
+opt-level = 3
+
+[target.'cfg(target_os = "linux")'.dependencies]
+nix = { version = "0.29", features = ["fs", "ioctl"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+    "Win32_System_WindowsProgramming",
+    "Win32_Foundation",
+    "Win32_Security"
+] }

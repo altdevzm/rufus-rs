@@ -1,0 +1,38 @@
+[Setup]
+AppName=__APP_NAME__
+AppVersion=__APP_VERSION__
+AppId={{E6A7A025-0B25-40A7-9EA1-9D1D7D6B4A20}}
+AppPublisher=altdevzm
+AppPublisherURL=https://github.com/altdevzm
+AppSupportURL=https://github.com/altdevzm/rufus-rs
+AppUpdatesURL=https://github.com/altdevzm/rufus-rs/releases
+DefaultDirName={autopf}\__APP_NAME__
+DefaultGroupName=__APP_NAME__
+OutputDir=__INSTALLER_OUTPUT__
+OutputBaseFilename=rufus-rs-setup-__APP_VERSION__
+Compression=lzma
+SolidCompression=yes
+PrivilegesRequired=admin
+SetupIconFile=__ICON_FILE__
+UninstallDisplayIcon={app}\__APP_EXE__
+ArchitecturesAllowed=x64
+ArchitecturesInstallIn64BitMode=x64
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Tasks]
+Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
+
+[Files]
+Source: "{#MySourceDir}\dist\rufus-rs.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+[Icons]
+Name: "{commonprograms}\__APP_NAME__"; Filename: "{app}\__APP_EXE__"
+Name: "{commondesktop}\__APP_NAME__"; Filename: "{app}\__APP_EXE__"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\__APP_EXE__"; Description: "Launch __APP_NAME__"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}"

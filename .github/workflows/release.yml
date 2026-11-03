@@ -1,0 +1,143 @@
+name: Release Windows Installer
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version tag, for example v1.0.0"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+    env:
+      CARGO_TERM_COLOR: always
+      APP_NAME: Rufus-RS
+      APP_ID: com.altdevzm.rufus-rs
+      DIST_DIR: ${{ github.workspace }}\dist
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Determine release version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="${{ github.event.inputs.version }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+
+          if [ -z "$TAG" ]; then
+            echo "No version tag provided"
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          version = os.environ["APP_VERSION"]
+          cargo_path = pathlib.Path("Cargo.toml")
+          text = cargo_path.read_text(encoding="utf-8")
+          updated, count = re.subn(r'(?m)^version = ".*?"$', f'version = "{version}"', text, count=1)
+          if count != 1:
+              raise SystemExit("Cargo.toml version field not found")
+          cargo_path.write_text(updated, encoding="utf-8")
+          PY
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+          cache-all-crates: true
+          cache-targets: true
+
+      - name: Run tests
+        shell: bash
+        run: cargo test --locked
+
+      - name: Build release binary
+        shell: bash
+        run: cargo build --release --locked
+
+      - name: Create portable ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\dist" | Out-Null
+          Copy-Item "$env:GITHUB_WORKSPACE\target\release\rufus-rs.exe" "$env:GITHUB_WORKSPACE\dist\rufus-rs.exe"
+          Compress-Archive -Path "$env:GITHUB_WORKSPACE\dist\rufus-rs.exe" -DestinationPath "$env:GITHUB_WORKSPACE\rufus-rs-portable-$env:APP_VERSION.zip" -Force
+
+      - name: Generate installer icon
+        shell: pwsh
+        run: |
+          choco install imagemagick -y --no-progress
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\assets" | Out-Null
+          & magick -size 256x256 xc:'#1f6feb' -fill white -font 'Segoe UI' -pointsize 140 -gravity center -annotate +0+18 'R' "$env:GITHUB_WORKSPACE\assets\rufus-rs.ico"
+
+      - name: Render Inno Setup template
+        shell: pwsh
+        run: |
+          $template = Get-Content "$env:GITHUB_WORKSPACE\installer\rufus-rs.iss.template" -Raw
+          $template = $template.Replace('__APP_VERSION__', $env:APP_VERSION)
+          $template = $template.Replace('__APP_NAME__', $env:APP_NAME)
+          $template = $template.Replace('__INSTALLER_OUTPUT__', "$env:GITHUB_WORKSPACE\dist")
+          $template = $template.Replace('__ICON_FILE__', "$env:GITHUB_WORKSPACE\assets\rufus-rs.ico")
+          $template = $template.Replace('__APP_EXE__', 'rufus-rs.exe')
+          $template | Set-Content "$env:GITHUB_WORKSPACE\installer\rufus-rs.iss" -Encoding UTF8
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            throw "ISCC not found at $iscc"
+          }
+          "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          & "$env:ISCC" "$env:GITHUB_WORKSPACE\installer\rufus-rs.iss"
+          $installer = Join-Path $env:GITHUB_WORKSPACE "dist\rufus-rs-setup-$env:APP_VERSION.exe"
+          if (-not (Test-Path $installer)) {
+            throw "Installer was not created: $installer"
+          }
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rufus-rs-windows-${{ env.APP_VERSION }}
+          path: |
+            ${{ github.workspace }}\dist\rufus-rs-setup-${{ env.APP_VERSION }}.exe
+            ${{ github.workspace }}\rufus-rs-portable-${{ env.APP_VERSION }}.zip
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          files: |
+            ${{ github.workspace }}\dist\rufus-rs-setup-${{ env.APP_VERSION }}.exe
+            ${{ github.workspace }}\rufus-rs-portable-${{ env.APP_VERSION }}.zip
